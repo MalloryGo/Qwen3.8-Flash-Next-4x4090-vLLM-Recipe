@@ -22,6 +22,7 @@
 | 项目 | 配置 |
 |---|---|
 | GPU | 4× NVIDIA RTX 4090 24 GB，SM89 |
+| 系统内存 | 256 GB DDR4-3200 ECC RDIMM |
 | 系统 | Ubuntu 24.04 |
 | vLLM | 0.30.0，commit `ced6857afa0ea7b2e3f0846a62e1394e90f15607` |
 | 并行方式 | TP2 × PP2，PP 分层 `25,23`，EP 开启 |
@@ -44,7 +45,7 @@
 
 - 4 张 RTX 4090 24 GB；
 - 可正常使用 GPU 的 NVIDIA 驱动和 Docker；
-- 比较充足的系统内存；PLE 会使用 CPU pinned memory，但本项目不把某个内存容量写成最低门槛；
+- 系统内存：测试配置为 256 GB DDR4-3200 ECC RDIMM；这套测试 workload 的 host memory 峰值约 89.4 GiB；
 - 模型权重大约需要 120 GiB 磁盘空间，另外还要预留 Docker 镜像空间；
 - 首次下载模型和基础镜像时需要联网。
 

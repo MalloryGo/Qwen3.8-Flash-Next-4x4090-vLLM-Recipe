@@ -22,6 +22,7 @@ This is a deployment recipe, **not** a model release and **not** a vLLM fork. Mo
 | Item | Tested value |
 |---|---|
 | GPU | 4× NVIDIA RTX 4090 24 GB, SM89 |
+| System RAM | 256 GB DDR4-3200 ECC RDIMM |
 | OS | Ubuntu 24.04 |
 | vLLM base | 0.30.0, commit `ced6857afa0ea7b2e3f0846a62e1394e90f15607` |
 | Parallelism | TP2 × PP2, PP partition `25,23`, EP enabled |
@@ -42,7 +43,7 @@ The recipe was validated on Ubuntu 24.04 with Docker and NVIDIA Container Toolki
 
 - four 24 GB RTX 4090 GPUs;
 - a working NVIDIA driver and Docker GPU runtime;
-- ample system RAM; PLE uses CPU-pinned memory, but this recipe does not claim a minimum RAM requirement;
+- system RAM: the validated host used 256 GB DDR4-3200 ECC RDIMM; observed peak host-memory use was about 89.4 GiB in the measured workloads;
 - roughly 120 GiB of storage for the model checkpoint, plus Docker image space;
 - Internet access for the initial model/image download.
 

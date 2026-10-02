@@ -14,6 +14,7 @@
 | 항목 | 구성 |
 |---|---|
 | GPU | 4× RTX 4090 24 GB, SM89, no NVLink |
+| System RAM | 256 GB DDR4-3200 ECC RDIMM |
 | OS | Ubuntu 24.04 |
 | vLLM | 0.30.0 @ `ced6857afa0ea7b2e3f0846a62e1394e90f15607` |
 | Parallelism | TP2 × PP2, layers `25,23`, EP ON |
@@ -26,6 +27,8 @@
 | Multimodal | image + video |
 
 GPU 번호와 topology는 호스트마다 다를 수 있습니다. 스크립트 기본값은 `0,1,2,3`이며 필요하면 `GPU_ORDER`로 변경할 수 있습니다.
+
+검증 호스트는 256 GB DDR4-3200 ECC RDIMM을 사용했고, 측정한 workload에서 host memory 최대 사용량은 약 89.4 GiB였습니다.
 
 ## 설치
 

@@ -5,7 +5,8 @@
 - 4× NVIDIA RTX 4090 24 GB (Ada / SM89)
 - PCIe-only multi-GPU setup
 - Ubuntu 24.04
-- ample host RAM for the CPU-pinned PLE allocation; no minimum RAM requirement is claimed
+- 256 GB DDR4-3200 ECC RDIMM on the validated host
+- peak host-memory use in the measured workloads: about 89.4 GiB
 
 ## Serving layout
 

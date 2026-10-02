@@ -14,6 +14,7 @@
 | 項目 | 構成 |
 |---|---|
 | GPU | 4× RTX 4090 24 GB, SM89, no NVLink |
+| System RAM | 256 GB DDR4-3200 ECC RDIMM |
 | OS | Ubuntu 24.04 |
 | vLLM | 0.30.0 @ `ced6857afa0ea7b2e3f0846a62e1394e90f15607` |
 | Parallelism | TP2 × PP2, layers `25,23`, EP ON |
@@ -26,6 +27,8 @@
 | Multimodal | image + video |
 
 GPU 番号と topology はホストごとに異なります。スクリプトの既定値は `0,1,2,3` で、必要なら `GPU_ORDER` で変更できます。
+
+検証ホストは 256 GB DDR4-3200 ECC RDIMM を使用し、測定した workload では host memory の最大使用量は約 89.4 GiB でした。
 
 ## セットアップ
 
