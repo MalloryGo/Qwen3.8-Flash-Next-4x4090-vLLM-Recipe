@@ -1,0 +1,368 @@
+From a5ea1804745063a8b1b347e3bddc4a139c832fa5 Mon Sep 17 00:00:00 2001
+From: Recipe integration <integration@example.org>
+Date: Sun, 27 Sep 2026 00:55:13 +0800
+Subject: [PATCH 6/7] Load validated Merlin QSA KV scale sidecar
+
+---
+ .../qwen4_exp/test_qsa_static_kv_scales.py    | 118 ++++++++++++++++++
+ vllm/envs.py                                  |   2 +
+ vllm/models/qwen4_exp/nvidia/model.py         |  57 ++++++++-
+ vllm/models/qwen4_exp/nvidia/qsa.py           |  85 +++++++++++++
+ 4 files changed, 259 insertions(+), 3 deletions(-)
+ create mode 100644 tests/models/qwen4_exp/test_qsa_static_kv_scales.py
+
+diff --git a/tests/models/qwen4_exp/test_qsa_static_kv_scales.py b/tests/models/qwen4_exp/test_qsa_static_kv_scales.py
+new file mode 100644
+index 00000000..f5b30304
+--- /dev/null
++++ b/tests/models/qwen4_exp/test_qsa_static_kv_scales.py
+@@ -0,0 +1,118 @@
++# SPDX-License-Identifier: Apache-2.0
++# SPDX-FileCopyrightText: Copyright contributors to the vLLM project
++
++import json
++
++import pytest
++import torch
++from torch import nn
++
++from vllm.models.qwen4_exp.nvidia.qsa import (
++    Qwen4ExpQSAAttention,
++    load_qsa_static_kv_scales,
++)
++
++
++def _qsa_layer(name: str) -> Qwen4ExpQSAAttention:
++    layer = Qwen4ExpQSAAttention.__new__(Qwen4ExpQSAAttention)
++    nn.Module.__init__(layer)
++    layer.layer_name = name
++    layer.kv_cache_dtype = "fp8_e4m3"
++    for field in ("_k_scale", "_v_scale"):
++        layer.register_buffer(field, torch.zeros(()))
++    layer._k_scale_cpu = torch.zeros(())
++    layer._v_scale_cpu = torch.zeros(())
++    layer._k_scale_float = 0.0
++    layer._v_scale_float = 0.0
++    return layer
++
++
++def _sidecar() -> dict[str, dict[str, float]]:
++    return {
++        "model.layers.1.self_attn.attn": {"k_scale": 0.25, "v_scale": 0.5},
++        "model.layers.3.self_attn.attn": {"k_scale": 0.75, "v_scale": 1.0},
++    }
++
++
++def test_qsa_scale_sidecar_validates_global_and_applies_local_pp_layers(
++    tmp_path,
++) -> None:
++    path = tmp_path / "qsa_kv_scales_262k.json"
++    path.write_text(json.dumps(_sidecar()), encoding="utf-8")
++    local = {
++        "model.layers.3.self_attn.attn": _qsa_layer(
++            "model.layers.3.self_attn.attn"
++        )
++    }
++
++    applied = load_qsa_static_kv_scales(
++        local,
++        path,
++        expected_layer_names=set(_sidecar()),
++    )
++
++    assert applied == {"model.layers.3.self_attn.attn": (0.75, 1.0)}
++    layer = local["model.layers.3.self_attn.attn"]
++    assert layer._k_scale.item() == 0.75
++    assert layer._v_scale.item() == 1.0
++    assert layer._k_scale_cpu.item() == 0.75
++    assert layer._v_scale_cpu.item() == 1.0
++    assert layer._k_scale_float == 0.75
++    assert layer._v_scale_float == 1.0
++
++
++@pytest.mark.parametrize(
++    "payload",
++    [
++        {"model.layers.1.self_attn.attn": {"k_scale": 0.25, "v_scale": 0.5}},
++        _sidecar()
++        | {"model.layers.5.self_attn.attn": {"k_scale": 1.0, "v_scale": 1.0}},
++        {
++            "model.layers.1.self_attn.attn": {"k_scale": 0.0, "v_scale": 0.5},
++            "model.layers.3.self_attn.attn": {"k_scale": 0.75, "v_scale": 1.0},
++        },
++    ],
++)
++def test_qsa_scale_sidecar_fails_closed_on_invalid_coverage_or_values(
++    tmp_path, payload
++) -> None:
++    path = tmp_path / "qsa_kv_scales_262k.json"
++    path.write_text(json.dumps(payload), encoding="utf-8")
++    local = {
++        "model.layers.3.self_attn.attn": _qsa_layer(
++            "model.layers.3.self_attn.attn"
++        )
++    }
++
++    with pytest.raises(ValueError):
++        load_qsa_static_kv_scales(local, path, set(_sidecar()))
++
++
++def test_qsa_scale_sidecar_rejects_duplicate_layer_keys(tmp_path) -> None:
++    path = tmp_path / "qsa_kv_scales_262k.json"
++    path.write_text(
++        '{"model.layers.1.self_attn.attn":{"k_scale":1,"v_scale":1},'
++        '"model.layers.1.self_attn.attn":{"k_scale":2,"v_scale":2},'
++        '"model.layers.3.self_attn.attn":{"k_scale":1,"v_scale":1}}',
++        encoding="utf-8",
++    )
++    local = {
++        "model.layers.3.self_attn.attn": _qsa_layer(
++            "model.layers.3.self_attn.attn"
++        )
++    }
++
++    with pytest.raises(ValueError, match="Duplicate JSON key"):
++        load_qsa_static_kv_scales(local, path, set(_sidecar()))
++
++
++def test_qsa_scale_sidecar_requires_an_existing_file(tmp_path) -> None:
++    path = tmp_path / "missing-qsa-scales.json"
++    local = {
++        "model.layers.3.self_attn.attn": _qsa_layer(
++            "model.layers.3.self_attn.attn"
++        )
++    }
++
++    with pytest.raises(FileNotFoundError):
++        load_qsa_static_kv_scales(local, path, set(_sidecar()))
+diff --git a/vllm/envs.py b/vllm/envs.py
+index 6158f86f..7933fe2d 100755
+--- a/vllm/envs.py
++++ b/vllm/envs.py
+@@ -48,6 +48,7 @@ if TYPE_CHECKING:
+     VLLM_TRACE_FUNCTION: int = 0
+     VLLM_USE_FLASHINFER_SAMPLER: bool = True
+     VLLM_PP_LAYER_PARTITION: str | None = None
++    VLLM_QSA_KV_SCALES: str | None = None
+     VLLM_CPU_KVCACHE_SPACE: int | None = 0
+     VLLM_CPU_OMP_THREADS_BIND: str = "auto"
+     VLLM_CPU_NUM_OF_RESERVED_CPU: int | None = None
+@@ -862,6 +863,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
+     ),
+     # Pipeline stage partition strategy
+     "VLLM_PP_LAYER_PARTITION": lambda: os.getenv("VLLM_PP_LAYER_PARTITION", None),
++    "VLLM_QSA_KV_SCALES": lambda: os.getenv("VLLM_QSA_KV_SCALES", None),
+     # (CPU backend only) CPU key-value cache space.
+     # default is None and will be set as 4 GB
+     "VLLM_CPU_KVCACHE_SPACE": lambda: (
+diff --git a/vllm/models/qwen4_exp/nvidia/model.py b/vllm/models/qwen4_exp/nvidia/model.py
+index 54ee6f02..893c29dc 100644
+--- a/vllm/models/qwen4_exp/nvidia/model.py
++++ b/vllm/models/qwen4_exp/nvidia/model.py
+@@ -8,8 +8,10 @@ from itertools import islice
+ import torch
+ from torch import nn
+ 
++from vllm import envs
+ from vllm.config import VllmConfig
+ from vllm.distributed import get_pp_group
++from vllm.logger import init_logger
+ from vllm.model_executor.layers.fused_moe.utils import (
+     is_model_fused_shared_expert_compatible,
+ )
+@@ -79,7 +81,9 @@ from ..config import Qwen4ExpConfig
+ from .hyperconnection import GatedResidual, HyperConnectionConfig
+ from .low_latency_gemm import enable_qwen4_exp_low_latency_gemm
+ from .ple_layer import Qwen4ExpPLELayer
+-from .qsa import Qwen4ExpQSAAttention
++from .qsa import Qwen4ExpQSAAttention, load_qsa_static_kv_scales
++
++logger = init_logger(__name__)
+ 
+ 
+ def without_modelopt_fp4(
+@@ -387,6 +391,7 @@ class Qwen4ExpModel(nn.Module):
+         super().__init__()
+         config: Qwen4ExpTextConfig = vllm_config.model_config.hf_text_config
+         self.config = config
++        self._layer_prefix = prefix
+         self.num_redundant_experts = (
+             vllm_config.parallel_config.eplb_config.num_redundant_experts
+         )
+@@ -629,6 +634,48 @@ class Qwen4ExpModel(nn.Module):
+         return loaded
+ 
+ 
++def _maybe_load_qsa_static_kv_scales(model: Qwen4ExpModel) -> None:
++    path = (envs.VLLM_QSA_KV_SCALES or "").strip()
++    local_qsa = {
++        layer.layer_name: layer
++        for layer in model.modules()
++        if isinstance(layer, Qwen4ExpQSAAttention)
++    }
++    expected = {
++        f"{model._layer_prefix}.layers.{layer_id}.self_attn.attn"
++        for layer_id in model._qsa_layer_ids
++    }
++    if not expected:
++        if path:
++            raise ValueError(
++                "VLLM_QSA_KV_SCALES is set for a model without QSA layers"
++            )
++        return
++
++    has_fp8_qsa = any(
++        layer.kv_cache_dtype in ("fp8", "fp8_e4m3")
++        for layer in local_qsa.values()
++    )
++    if not path:
++        if has_fp8_qsa:
++            raise ValueError(
++                "Qwen4Exp FP8 QSA requires VLLM_QSA_KV_SCALES pointing to the "
++                "checkpoint qsa_kv_scales_262k.json sidecar"
++            )
++        return
++
++    applied = load_qsa_static_kv_scales(
++        local_qsa,
++        path,
++        expected_layer_names=expected,
++    )
++    logger.info(
++        "Qwen4Exp QSA: validated %d global scale entries; applied %d local entries",
++        len(expected),
++        len(applied),
++    )
++
++
+ class Qwen4ExpForCausalLM(
+     nn.Module,
+     HasInnerState,
+@@ -855,7 +902,9 @@ class Qwen4ExpForCausalLM(
+             self,
+             ignore_unexpected_suffixes=_QWEN4_EXP_IGNORED_MISSING_SUFFIXES.copy(),
+         )
+-        return loader.load_weights(weights, mapper=mapper)
++        loaded = loader.load_weights(weights, mapper=mapper)
++        _maybe_load_qsa_static_kv_scales(self.model)
++        return loaded
+ 
+ 
+ class Qwen4ExpProcessingInfo(Qwen3VLProcessingInfo):
+@@ -1050,7 +1099,9 @@ class Qwen4ExpForConditionalGeneration(
+             self,
+             ignore_unexpected_suffixes=_QWEN4_EXP_IGNORED_MISSING_SUFFIXES.copy(),
+         )
+-        return loader.load_weights(weights, mapper=mapper)
++        loaded = loader.load_weights(weights, mapper=mapper)
++        _maybe_load_qsa_static_kv_scales(self.language_model.model)
++        return loaded
+ 
+     @classmethod
+     def get_mamba_state_dtype_from_config(
+diff --git a/vllm/models/qwen4_exp/nvidia/qsa.py b/vllm/models/qwen4_exp/nvidia/qsa.py
+index e480142a..1eb8c0a1 100644
+--- a/vllm/models/qwen4_exp/nvidia/qsa.py
++++ b/vllm/models/qwen4_exp/nvidia/qsa.py
+@@ -4,6 +4,10 @@
+ 
+ from __future__ import annotations
+ 
++import json
++import math
++from collections.abc import Mapping
++from pathlib import Path
+ from typing import ClassVar, cast
+ 
+ import torch
+@@ -526,9 +530,90 @@ class Qwen4ExpQSAAttention(Qwen3NextAttention, AttentionLayerBase):
+         return output
+ 
+ 
++def load_qsa_static_kv_scales(
++    qsa_layers: Mapping[str, Qwen4ExpQSAAttention],
++    sidecar_path: str | Path,
++    expected_layer_names: set[str],
++) -> dict[str, tuple[float, float]]:
++    """Validate a full-model sidecar and apply only this PP rank's QSA scales."""
++    path = Path(sidecar_path)
++
++    def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
++        result: dict[str, object] = {}
++        for key, value in pairs:
++            if key in result:
++                raise ValueError(f"Duplicate JSON key {key!r} in {path}")
++            result[key] = value
++        return result
++
++    raw = json.loads(
++        path.read_text(encoding="utf-8"), object_pairs_hook=reject_duplicate_keys
++    )
++    if not isinstance(raw, dict):
++        raise ValueError(f"{path} must contain a JSON object keyed by layer name")
++
++    local_names = set(qsa_layers)
++    if not local_names <= expected_layer_names:
++        raise ValueError("Local QSA layers are not a subset of the expected model set")
++    if any(layer.layer_name != name for name, layer in qsa_layers.items()):
++        raise ValueError("QSA layer mapping keys must match each layer's layer_name")
++
++    missing = sorted(expected_layer_names - raw.keys())
++    extra = sorted(raw.keys() - expected_layer_names)
++    if missing or extra:
++        raise ValueError(
++            f"Invalid QSA scale coverage in {path}: missing={missing}, extra={extra}"
++        )
++
++    validated: dict[str, tuple[float, float]] = {}
++    for name in sorted(expected_layer_names):
++        entry = raw[name]
++        if not isinstance(entry, dict) or set(entry) != {"k_scale", "v_scale"}:
++            raise ValueError(f"{name} must contain exactly k_scale and v_scale")
++        scales: list[float] = []
++        for field in ("k_scale", "v_scale"):
++            value = entry[field]
++            if type(value) not in (int, float):
++                raise ValueError(f"{name}.{field} must be a scalar JSON number")
++            scale = float(value)
++            if not math.isfinite(scale) or scale <= 0.0:
++                raise ValueError(f"{name}.{field} must be finite and positive")
++            scales.append(scale)
++        validated[name] = (scales[0], scales[1])
++
++    for name, layer in qsa_layers.items():
++        if layer.kv_cache_dtype not in ("fp8", "fp8_e4m3"):
++            raise ValueError(f"{name} static QSA scales require an FP8 KV cache")
++        for field in ("_k_scale", "_v_scale", "_k_scale_cpu", "_v_scale_cpu"):
++            tensor = getattr(layer, field, None)
++            if not isinstance(tensor, torch.Tensor) or tensor.numel() != 1:
++                raise ValueError(f"{name}.{field} must be an existing scalar tensor")
++            if tensor.device.type == "meta":
++                raise ValueError(f"{name}.{field} is still on the meta device")
++        if (
++            layer._k_scale_cpu.device.type != "cpu"
++            or layer._v_scale_cpu.device.type != "cpu"
++        ):
++            raise ValueError(f"{name} host QSA scales must remain on CPU")
++
++    applied = {name: validated[name] for name in sorted(local_names)}
++    with torch.no_grad():
++        for name, (k_scale, v_scale) in applied.items():
++            layer = qsa_layers[name]
++            layer._k_scale.fill_(k_scale)
++            layer._v_scale.fill_(v_scale)
++            layer._k_scale_cpu.fill_(k_scale)
++            layer._v_scale_cpu.fill_(v_scale)
++            # The QSA Triton path consumes these Python scalars directly.
++            layer._k_scale_float = k_scale
++            layer._v_scale_float = v_scale
++    return applied
++
++
+ __all__ = [
+     "QSAIndexer",
+     "Qwen4ExpQSAAttention",
+     "Qwen4ExpQSAFlashAttentionBackend",
+     "Qwen4ExpQSAFlashAttentionImpl",
++    "load_qsa_static_kv_scales",
+ ]

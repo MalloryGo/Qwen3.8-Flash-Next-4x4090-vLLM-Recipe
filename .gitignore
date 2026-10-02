@@ -1,0 +1,47 @@
+# Secrets and local configuration
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+api-key*
+credentials*
+secrets/
+.ssh/
+
+# Model / container artifacts
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+*.tar
+*.tar.gz
+*.zip
+*.img
+*.iso
+
+# Private benchmark/runtime output
+*.log
+results/
+logs/
+__pycache__/
+*.pyc
+
+# Images / videos are intentionally not part of the public recipe
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.heic
+*.mp4
+*.mov
+*.mkv
+*.avi
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

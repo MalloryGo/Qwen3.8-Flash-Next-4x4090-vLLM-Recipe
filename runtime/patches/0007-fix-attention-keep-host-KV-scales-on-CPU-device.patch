@@ -1,0 +1,48 @@
+From b21ea4582c8bd947c6c469bc495b9a73ea449893 Mon Sep 17 00:00:00 2001
+From: Recipe integration <integration@example.org>
+Date: Mon, 28 Sep 2026 17:55:37 +0800
+Subject: [PATCH 7/7] fix(attention): keep host KV scales on CPU device
+
+---
+ tests/quantization/test_fp8.py                    | 12 ++++++++++++
+ vllm/model_executor/layers/attention/attention.py |  4 ++--
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/tests/quantization/test_fp8.py b/tests/quantization/test_fp8.py
+index 65e119b0..4f1992b8 100644
+--- a/tests/quantization/test_fp8.py
++++ b/tests/quantization/test_fp8.py
+@@ -919,6 +919,18 @@ def test_kv_cache_scale_sync_to_host_copies():
+     assert layer._v_scale_cpu.item() == pytest.approx(layer._v_scale.item())
+ 
+ 
++@pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
++def test_default_host_kv_scales_stay_on_cpu_in_cuda_device_context() -> None:
++    layer = torch.nn.Module()
++    with torch.device("cuda"):
++        set_default_quant_scales(layer, register_buffer=True)
++
++    assert layer._k_scale.device.type == "cuda"
++    assert layer._v_scale.device.type == "cuda"
++    assert layer._k_scale_cpu.device.type == "cpu"
++    assert layer._v_scale_cpu.device.type == "cpu"
++
++
+ @pytest.mark.skipif(
+     not is_quant_method_supported("fp8"),
+     reason="FP8 is not supported on this GPU type.",
+diff --git a/vllm/model_executor/layers/attention/attention.py b/vllm/model_executor/layers/attention/attention.py
+index a001c8c2..dc483bc7 100644
+--- a/vllm/model_executor/layers/attention/attention.py
++++ b/vllm/model_executor/layers/attention/attention.py
+@@ -145,8 +145,8 @@ def set_default_quant_scales(layer: nn.Module, register_buffer: bool = False) ->
+     layer._q_scale_float = 1.0
+     layer._k_scale_float = 1.0
+     layer._v_scale_float = 1.0
+-    layer._k_scale_cpu = torch.tensor(1.0, dtype=torch.float32)
+-    layer._v_scale_cpu = torch.tensor(1.0, dtype=torch.float32)
++    layer._k_scale_cpu = torch.tensor(1.0, dtype=torch.float32, device="cpu")
++    layer._v_scale_cpu = torch.tensor(1.0, dtype=torch.float32, device="cpu")
+     layer._prob_scale_float = 1.0
+ 
+ 

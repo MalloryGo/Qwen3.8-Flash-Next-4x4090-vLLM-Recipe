@@ -1,0 +1,189 @@
+{
+  "tested_hardware": {
+    "gpu": "4 x NVIDIA RTX 4090 24GB, SM89",
+    "os": "Ubuntu 24.04"
+  },
+  "software": {
+    "vllm": "0.30.0",
+    "vllm_base_commit": "ced6857afa0ea7b2e3f0846a62e1394e90f15607",
+    "recipe_revision": "b21ea4582c8bd947c6c469bc495b9a73ea449893",
+    "python": "3.12.3",
+    "torch": "2.13.0+cu130",
+    "cuda": "13.0.3",
+    "triton": "3.7.1"
+  },
+  "serving_profile": {
+    "tensor_parallel": 2,
+    "pipeline_parallel": 2,
+    "pipeline_partition": [
+      25,
+      23
+    ],
+    "expert_parallel": true,
+    "max_model_len": 262144,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 1024,
+    "gpu_memory_utilization": 0.94,
+    "kv_cache_dtype": "fp8_e4m3",
+    "mtp_speculative_tokens": 2,
+    "ple": "CPU pinned memory / UVA",
+    "prefix_cache_default": true,
+    "nccl_p2p_disable": true,
+    "custom_all_reduce": false
+  },
+  "single_request_long_context": {
+    "method": "derived decode rate = 1000 / median TPOT(ms); MTP2; normal graphs; prefix cache off; one warmup and two measured requests per target",
+    "results": [
+      {
+        "prompt_tokens": 128000,
+        "output_tokens_per_request": 512,
+        "median_ttft_s": 10.884,
+        "median_tpot_ms": 4.86,
+        "derived_decode_tok_s": 205.8
+      },
+      {
+        "prompt_tokens": 220000,
+        "output_tokens_per_request": 512,
+        "median_ttft_s": 19.116,
+        "median_tpot_ms": 4.837,
+        "derived_decode_tok_s": 206.7
+      },
+      {
+        "prompt_tokens": 255000,
+        "output_tokens_per_request": 384,
+        "median_ttft_s": 22.311,
+        "median_tpot_ms": 5.191,
+        "derived_decode_tok_s": 192.6
+      },
+      {
+        "prompt_tokens": 260000,
+        "output_tokens_per_request": 512,
+        "median_ttft_s": 22.744,
+        "median_tpot_ms": 4.837,
+        "derived_decode_tok_s": 206.8
+      }
+    ],
+    "exact_sequence_boundary": {
+      "prompt_tokens": 261888,
+      "output_tokens": 256,
+      "total_tokens": 262144,
+      "completed": true
+    }
+  },
+  "mtp_comparison": {
+    "actual_prompt_tokens": 125567,
+    "results": [
+      {
+        "mtp": 0,
+        "median_decode_tok_s": 100.18,
+        "kv_pool_tokens": null
+      },
+      {
+        "mtp": 2,
+        "median_decode_tok_s": 167.41,
+        "acceptance_percent": 68.61,
+        "kv_pool_tokens": 264527
+      },
+      {
+        "mtp": 3,
+        "median_decode_tok_s": 169.79,
+        "acceptance_percent": 56.61,
+        "kv_pool_tokens": 248584
+      }
+    ],
+    "recommended_mtp": 2,
+    "reason": "MTP3 was 1.42% faster in this sample; MTP2 retained 15,943 more KV tokens."
+  },
+  "concurrency": {
+    "method": "MTP2, prefix cache off, max_num_seqs=4; aggregate output throughput = total generated tokens / request-wave elapsed time",
+    "results": [
+      {
+        "workload": "2 x 128K",
+        "completed": "2/2",
+        "median_ttft_s": 17.54,
+        "median_tpot_ms": 4.97,
+        "aggregate_output_tok_s": 38.42
+      },
+      {
+        "workload": "3 x 80K",
+        "completed": "3/3",
+        "median_ttft_s": 14.04,
+        "median_tpot_ms": 20.39,
+        "aggregate_output_tok_s": 53.8
+      },
+      {
+        "workload": "4 x 60K",
+        "completed": "4/4",
+        "median_ttft_s": 13.47,
+        "median_tpot_ms": 21.1,
+        "aggregate_output_tok_s": 75.81
+      },
+      {
+        "workload": "100K + 60K + 40K + 20K",
+        "completed": "4/4",
+        "median_ttft_s": 9.63,
+        "median_tpot_ms": 10.85,
+        "aggregate_output_tok_s": 85.84
+      },
+      {
+        "workload": "12-request burst, max active 4",
+        "completed": "12/12",
+        "median_ttft_s": 12.24,
+        "median_tpot_ms": 18.89,
+        "aggregate_output_tok_s": 95.3
+      }
+    ],
+    "recommended_active_concurrency": 4
+  },
+  "prefix_cache": {
+    "prompt_tokens": 128000,
+    "cold_ttft_s": 13.934,
+    "reuse_ttft_s": 0.846,
+    "reuse_hit_tokens": 124176,
+    "all_requests_http_200": true,
+    "note": "Bounded 2/3/4-way shared/mixed-prefix probes did not reproduce the deferred hybrid Mamba/prefix-cache issue."
+  },
+  "agent_and_api": {
+    "responses_api": true,
+    "responses_streaming": true,
+    "responses_retrieve_cancel": true,
+    "tool_calling": true,
+    "tool_result_roundtrip": true,
+    "strict_json_schema": true,
+    "parallel_auto_tool_calls": true,
+    "agent_burst": {
+      "arrivals": 12,
+      "max_active": 4,
+      "tool_choice": "auto",
+      "completed": 12,
+      "failed": 0
+    },
+    "known_limitation": "Concurrent forced/required tool choice can intermittently return XGrammar HTTP 500; serialize forced/required requests."
+  },
+  "multimodal": {
+    "single_image": true,
+    "multi_image": true,
+    "large_image": true,
+    "image_to_tool_call": true,
+    "short_video": true,
+    "video_24s_48_frames": true,
+    "video_30_510998s": true,
+    "image_only_benchmark": {
+      "requests": 3,
+      "completed": 3,
+      "failed": 0,
+      "median_ttft_ms": 362.7,
+      "median_tpot_ms": 6.37,
+      "output_tok_s": 111.33
+    }
+  },
+  "resources": {
+    "vram_note": "The tested workloads ran close to the 24 GB/GPU limit.",
+    "host_memory_note": "Host-memory capacity is intentionally not fingerprinted here; PLE uses CPU-pinned memory."
+  },
+  "notes": [
+    "Measurements are from one host and are reference data, not universal performance guarantees.",
+    "Raw prompts, responses, schemas, media and private logs are intentionally not published.",
+    "The model checkpoint is downloaded separately from the original model repository."
+  ]
+}

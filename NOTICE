@@ -1,0 +1,18 @@
+Qwen3.8-Flash-Next-4x4090-vLLM-Recipe
+Copyright 2026 contributors to this recipe
+
+This repository contains a deployment recipe and Apache-2.0-licensed modifications
+of vLLM source files. The modified vLLM files retain their upstream SPDX and
+copyright notices.
+
+Each distributed file under `runtime/overlay/vllm/` that differs from upstream
+carries a prominent modification notice at the top of the file. The added
+notice comments do not change executable behavior.
+
+Patches 1-3 are backports of upstream vLLM work and are linked to their original
+pull requests and commits in runtime/patch_manifest.json. Patches 4-7 are small
+integration fixes developed while qualifying the Merlin checkpoint on the tested
+4x RTX 4090 system.
+
+The model weights are not distributed by this repository. See
+THIRD_PARTY_NOTICES.md for model and reference-project licensing and attribution.

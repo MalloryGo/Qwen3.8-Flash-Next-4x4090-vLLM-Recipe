@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "base": {
+    "repository": "https://github.com/vllm-project/vllm",
+    "tag": "v0.30.0",
+    "commit": "ced6857afa0ea7b2e3f0846a62e1394e90f15607"
+  },
+  "recipe_revision": "b21ea4582c8bd947c6c469bc495b9a73ea449893",
+  "patches": [
+    {
+      "order": 1,
+      "commit": "41a411a7e18026b55a29f4506a9d58bf7418188d",
+      "file": "patches/0001-Backport-Qwen4Exp-FP8-QSA-KV-path-55557.patch",
+      "sha256": "cd73f3ace56f5e6448e028c3d076a88376e72347ce6e3cba35de08174bb6c910",
+      "classification": "upstream backport",
+      "upstream": "https://github.com/vllm-project/vllm/pull/55557",
+      "upstream_commit": "dff1bde84dd6e34a49c150116d0f212507280910",
+      "reason": "Add the native Qwen4Exp FP8 E4M3 QSA/KV path used on SM89."
+    },
+    {
+      "order": 2,
+      "commit": "8b2cc6cf8f81fbdd47681481bca6dddcc3eb5214",
+      "file": "patches/0002-fix-kv-cache-ignore-empty-projected-uniform-groups.patch",
+      "sha256": "424611944b8ce7c830127534b4986960a9cee0878ef16f89695f58b1bbd2f1dc",
+      "classification": "upstream backport",
+      "upstream": "https://github.com/vllm-project/vllm/pull/54793",
+      "upstream_commit": "605974b8ccb4c2335a88fdaa67e786c3c90d7573",
+      "reason": "Do not allocate tensors for empty projected uniform KV groups owned by another pipeline stage."
+    },
+    {
+      "order": 3,
+      "commit": "66385e8a06262fe44bd88436840274660fd88c95",
+      "file": "patches/0003-fix-attention-intersect-worker-KV-cache-layouts.patch",
+      "sha256": "38264fefda382d1b88058a3cc6f8e42a77966c5ac7ce7ed59cc0c58838206ebd",
+      "classification": "upstream backport",
+      "upstream": "https://github.com/vllm-project/vllm/pull/54795",
+      "upstream_commit": "643c5793f7d7cd10fea963194f81b7ed460546bf",
+      "reason": "Use the ordered KV-layout intersection across PP workers with different hybrid-cache local layers."
+    },
+    {
+      "order": 4,
+      "commit": "310a70e1478db9c990d4a2c488d7e645b8fc5c5f",
+      "file": "patches/0004-Allow-Qwen4Exp-PLE-on-first-PP-stage-only.patch",
+      "sha256": "ac28ef2c246b4375ab214ce95ab793ee497ed450daa0fd816e490a072157f79a",
+      "classification": "recipe integration",
+      "reason": "Allow PLE with pipeline parallelism when every configured PLE layer belongs to PP0."
+    },
+    {
+      "order": 5,
+      "commit": "ab876512e0ab4bdd2c5b349110a2a1cacffbfee0",
+      "file": "patches/0005-Fix-Qwen4Exp-MTP-drafter-PP-input-ownership.patch",
+      "sha256": "027ec5ec5c45301ef84ca99945cb35239d13b8bdf4d098dfec34c3c01f298de2",
+      "classification": "recipe integration",
+      "reason": "Select final-stage Qwen4Exp MTP drafter input from intermediate_tensors ownership."
+    },
+    {
+      "order": 6,
+      "commit": "a5ea1804745063a8b1b347e3bddc4a139c832fa5",
+      "file": "patches/0006-Load-validated-Merlin-QSA-KV-scale-sidecar.patch",
+      "sha256": "3dd014d1795469927225023283f3fd7e9898e7a9a21034c92c19915047720102",
+      "classification": "recipe integration",
+      "reason": "Validate and apply Merlin qsa_kv_scales_262k.json to the QSA layers local to each PP stage."
+    },
+    {
+      "order": 7,
+      "commit": "b21ea4582c8bd947c6c469bc495b9a73ea449893",
+      "file": "patches/0007-fix-attention-keep-host-KV-scales-on-CPU-device.patch",
+      "sha256": "29c22a205342e51adf65bcdf05ec6ad9306240e9a866e28755e221dbb72f4a46",
+      "classification": "recipe integration",
+      "reason": "Create the documented host KV-scale copies explicitly on CPU under CUDA default-device model construction."
+    }
+  ],
+  "overlay_files": [
+    {
+      "path": "overlay/vllm/envs.py",
+      "sha256": "d3350b02ee56f62f5ec2fb0386723484f06c88652b1500bca55e59f21c0b43af"
+    },
+    {
+      "path": "overlay/vllm/model_executor/layers/attention/attention.py",
+      "sha256": "2ef1190fa899f06d67cc068e49c23b44adae7f2fb54c1e925b3f780868680da9"
+    },
+    {
+      "path": "overlay/vllm/model_executor/models/config.py",
+      "sha256": "ceb5f9f624570add4274538bd9bd361c255782356b9d76e8d49ac533df759ac8"
+    },
+    {
+      "path": "overlay/vllm/models/qwen4_exp/nvidia/model.py",
+      "sha256": "6d0aca07f1e6e05d4f8f9f982615128a9d356632c0db4bf39deae67ac45a5f48"
+    },
+    {
+      "path": "overlay/vllm/models/qwen4_exp/nvidia/model_state.py",
+      "sha256": "c9851f2647a627ebbc52e984b77c310d4edc8621ad9449bcfa4017fcf99267ac"
+    },
+    {
+      "path": "overlay/vllm/models/qwen4_exp/nvidia/mtp.py",
+      "sha256": "54c95fb557b04cbd2f3171789c559f0340aab6df30f661f82c786472f3cfb506"
+    },
+    {
+      "path": "overlay/vllm/models/qwen4_exp/nvidia/ops/qsa.py",
+      "sha256": "f3242ad69ab3d6061dfc015b68606591b5677115749a6c1dee37b167ebb68989"
+    },
+    {
+      "path": "overlay/vllm/models/qwen4_exp/nvidia/qsa.py",
+      "sha256": "e65435f6f0992884b5d759bd935af3c24c102baf113b693f3d133f0f5b8c969e"
+    },
+    {
+      "path": "overlay/vllm/v1/attention/backends/utils.py",
+      "sha256": "a1407ec7aa63ff1d07232c95457e573cf2dae975a8f0ac4c198f1f6996965949"
+    },
+    {
+      "path": "overlay/vllm/v1/core/kv_cache_utils.py",
+      "sha256": "083803da7499899729cb8baf17c3ec4bfb03e88ac49646d1ef6479e1f62ede1a"
+    }
+  ]
+}
